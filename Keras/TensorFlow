@@ -1,0 +1,78 @@
+# Name: Minseok Gang
+# 9074016560
+# HW9
+
+import tensorflow as tf
+import numpy as np
+from tensorflow import keras
+from tensorflow.keras import layers
+import matplotlib.pyplot as plt
+import heapq
+
+
+def get_dataset(training=True):
+    mnist = keras.datasets.mnist
+    (train_images, train_labels), (test_images, test_labels) = mnist.load_data()
+
+    if training:
+        return (train_images, train_labels)
+
+    return (test_images, test_labels)
+
+
+def print_stats(images, labels):
+    class_names = ['Zero', 'One', 'Two', 'Three', 'Four',
+                   'Five', 'Six', 'Seven', 'Eight', 'Nine']
+    print(images.shape[0])
+    print("{dim1}x{dim2}".format(dim1=images.shape[1], dim2=images.shape[2]))
+
+    tmp = {}
+    for num in class_names:
+        tmp[num] = 0
+
+    for label in labels:
+        tmp[class_names[label]] += 1
+
+    num = 0
+    for key in tmp.keys():
+        print("{}.".format(num), key, "-", tmp[key])
+        num += 1
+
+
+def build_model():
+    model = keras.Sequential([layers.Flatten(input_shape=(28, 28)), layers.Dense(
+        128, activation='relu'), layers.Dense(64, activation='relu'), layers.Dense(10)])
+
+    opt = keras.optimizers.SGD(learning_rate=0.001)
+
+    loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+
+    model.compile(optimizer=opt, loss=loss_fn, metrics=['accuracy'])
+
+    return model
+
+
+def train_model(model, train_images, train_labels, T):
+    model.fit(train_images, train_labels, epochs=T)
+
+
+def evaluate_model(model, test_images, test_labels, show_loss=True):
+    test_loss, test_accuracy = model.evaluate(
+        test_images, test_labels, verbose=0)
+
+    if show_loss:
+        print("Loss:", '{:.4f}'.format(test_loss))
+
+    print("Accuracy:", '{:.2f}%'.format(test_accuracy*100))
+
+
+def predict_label(model, test_images, index):
+    class_names = ['Zero', 'One', 'Two', 'Three', 'Four',
+                   'Five', 'Six', 'Seven', 'Eight', 'Nine']
+    target = model.predict(test_images)[index]
+
+    top_3 = heapq.nlargest(3, target)
+
+    target = list(target)
+    for i in top_3:
+        print(class_names[target.index(i)]+':', '{:.2f}%'.format(i*100))
