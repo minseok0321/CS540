@@ -1,0 +1,170 @@
+# Min Seok Gang / gang3
+# HW7
+# 9074016560
+
+import csv
+import numpy as np
+from scipy import cluster
+import math
+import copy
+
+
+def load_data(filepath):
+    a = []
+    with open(filepath, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        convert_to_int = ['#', 'Total', 'HP', 'Attack',
+                          'Defense', 'Sp. Atk', 'Sp. Def', 'Speed']
+        count = 0
+        for line in reader:
+            for key, val in line.items():
+                for target in convert_to_int:
+                    if key == target:
+                        line[key] = int(val)
+                        break
+            a.append(line)
+            count += 1
+            if count == 20:
+                break
+    for d in a:
+        del d['Generation']
+        del d['Legendary']
+
+    return a
+
+
+def calculate_x_y(stats):
+    a = stats['Attack']
+    b = stats['Sp. Atk']
+    c = stats['Speed']
+    d = stats['Defense']
+    e = stats['Sp. Def']
+    f = stats['HP']
+
+    return (a+b+c, d+e+f)
+
+
+def hac(dataset):
+    filter_set = []
+    for element in dataset:
+        # checking for inf and NaN and filtering them out
+        if not math.isinf(element[0]) and not math.isinf(element[1]) and not math.isnan(element[0]) and not math.isnan(element[1]):
+            filter_set.append(element)
+
+    # filtered dataset
+    dataset = filter_set
+
+    # a list of merged cluster, (#th of merged, (data point1, data point2))
+    merged_cluster = []
+    all_distance = distance(dataset)
+    output = []
+    merge_count = len(dataset)
+    skip_flag = False
+    left_flag = False
+    right_flag = False
+
+    # dist[0] is distance, dist[1] is a list of 2 data points
+    for dist in all_distance:
+        if len(merged_cluster) == 0:
+            merged_cluster.append((merge_count, (dist[1])))
+            merge_count += 1
+            entry_merged = [dist[1][0], dist[1][1], dist[0], 2]
+            output.append(entry_merged)
+            continue
+
+        for entry in merged_cluster:  # looping through a list of merged cluster
+            # if both data points lay in same cluster
+            if dist[1][0] in entry[1] and dist[1][1] in entry[1]:
+                skip_flag = True
+                break
+            elif dist[1][0] in entry[1]:
+                a = entry[1]
+                pos1 = entry[0]
+                temp1 = entry
+                left_flag = True
+            elif dist[1][1] in entry[1]:
+                b = entry[1]
+                pos2 = entry[0]
+                temp2 = entry
+                right_flag = True
+
+        if skip_flag:
+            skip_flag = False
+            continue
+
+        if left_flag and right_flag:
+            merged_cluster.remove(temp1)
+            merged_cluster.remove(temp2)
+            new_cluster = a+b
+            merged_cluster.append((merge_count, new_cluster))
+            entry_merged = [min(pos1, pos2), max(
+                pos1, pos2), dist[0], len(new_cluster)]
+            output.append(entry_merged)
+            merge_count += 1
+            pos1 = 0
+            pos2 = 0
+
+        if not left_flag and right_flag:
+            merged_cluster.remove(temp2)
+            b = b+[dist[1][0]]
+            merged_cluster.append((merge_count, b))
+            entry_merged = [dist[1][0], pos2, dist[0], len(b)]
+            output.append(entry_merged)
+            merge_count += 1
+
+        if not right_flag and left_flag:
+            merged_cluster.remove(temp1)
+            a = a+[dist[1][1]]
+            merged_cluster.append((merge_count, a))
+            entry_merged = [dist[1][1], pos1, dist[0], len(a)]
+            output.append(entry_merged)
+            merge_count += 1
+
+        if not right_flag and not left_flag:
+            merged_cluster.append((merge_count, (dist[1])))
+            entry_merged = [dist[1][0], dist[1][1], dist[0], 2]
+            output.append(entry_merged)
+            merge_count += 1
+
+        right_flag = False
+        left_flag = False
+
+        if merge_count == len(dataset)+len(dataset)-1:
+            all_d = []
+            for i in output:
+                if not i[2] in all_d:
+                    all_d.append(i[2])
+
+            final = []
+            finish = len(output)
+
+            # Tie_breaking
+            for j in all_d:
+                count = 0
+                temp = []
+                if len(output) == 0:
+                    break
+                for k in output:
+                    if k[2] == j:
+                        temp.append(k)
+                        count += 1
+                    else:
+                        final += sorted(temp)
+                        del output[0:count]
+                        break
+
+            if len(final) != finish:
+                final += sorted(temp)
+
+            return np.array(final)
+
+
+def distance(dataset):
+    distance_in_order = []
+    for i in range(len(dataset)):
+        for j in range(i+1, len(dataset)):
+            distance = math.sqrt(
+                (dataset[i][0]-dataset[j][0])**2 + (dataset[i][1] - dataset[j][1])**2)
+            distance_in_order.append((distance, [i, j]))
+
+    return sorted(distance_in_order)
