@@ -1,0 +1,77 @@
+# Minseok Gang
+# HW5
+# 9074016560
+# gang3@wisc.edu
+
+from scipy.linalg import eigh
+import numpy as np
+import matplotlib.pyplot as plt
+
+def load_and_center_dataset(filename):
+    x = np.load(filename)
+    x = np.reshape(x,(2000, 784))
+    x = x - np.mean(x,axis=0)
+
+    return x
+
+def get_covariance(dataset):
+    original = dataset
+    transposed = np.transpose(dataset)
+    covariance = 1/(2000-1) * (np.dot(transposed, original))
+
+    return covariance
+
+def get_eig(S, m):
+    eigenVal, eigenVec = eigh(S, eigvals=(784-m, 783))
+    large_to_small = np.argsort(-eigenVal) #sorting index, descending order
+    eigval_diagonal = np.diagflat(eigenVal[large_to_small])
+    eigvector = eigenVec[:,large_to_small]  
+
+    return eigval_diagonal, eigvector
+
+
+def get_eig_perc(S, perc):
+    eigenVal, eigenVec = eigh(S)
+    eigenVal_sum = np.sum(eigenVal)
+
+    valid_eigval = []
+    valid_eigvec = []
+
+    for i in range(len(eigenVal)):
+        if eigenVal[i]/eigenVal_sum > perc:
+            valid_eigval.append(eigenVal[i])
+            valid_eigvec.append(eigenVec[:,i])
+
+    eig_val_matrix = np.array(valid_eigval)
+    #transposing to get the right format
+    eig_vec_matrix = np.transpose(np.array(valid_eigvec)) 
+    
+    large_to_small = np.argsort(-eig_val_matrix)
+    eigval_diagonal = np.diagflat(eig_val_matrix[large_to_small])
+    eig_vec_matrix = eig_vec_matrix[:,large_to_small]
+
+    return eigval_diagonal, eig_vec_matrix
+
+def project_image(image, U):
+    new_representation = np.dot(U, (np.dot(np.transpose(U), image)))
+
+    return new_representation
+
+
+def display_image(orig, proj):
+    reshaped_orig = np.reshape(orig, (28,28))
+    reshaped_proj = np.reshape(proj, (28,28))
+
+    figure, (axis1, axis2) = plt.subplots(nrows=1, ncols=2, figsize = (9,3))
+
+    axis1.set_title('Original')
+    axis2.set_title('Projection')
+
+    original = axis1.imshow(reshaped_orig, cmap='gray', aspect='equal')
+    projection = axis2.imshow(reshaped_proj, cmap='gray', aspect='equal')
+
+    figure.tight_layout()
+    figure.colorbar(original, ax = axis1)
+    figure.colorbar(projection, ax = axis2)
+
+    figure.show()
