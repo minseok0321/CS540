@@ -1,0 +1,208 @@
+#Min Seok Gang
+#Assignment 4
+#gang3@wisc.edu
+#9074016560
+
+
+
+import os
+import math
+
+def create_vocabulary(directory, cutoff):
+    """ Create a vocabulary from the training directory
+        return a sorted vocabulary list
+    """
+    vocab = []
+    all_tokens = []
+    dictionary = {}
+
+    for root, dirs, files in os.walk(directory): 
+        for d in dirs:
+            directory = os.path.join(root, d)
+            sub_directory = os.listdir(directory)
+            for file in sub_directory:
+                txt = os.path.join(directory, file)
+                file = open(txt, 'r', encoding='UTF-8')
+                token = file.readlines()
+                for w in token:
+                    w = w.strip("\n")
+                    if w in dictionary.keys():
+                        dictionary[w] += 1
+                    else:
+                        dictionary[w] = 1
+    
+    for key in dictionary.keys():
+        if dictionary[key] >= cutoff:
+            vocab.append(key)
+    
+            
+    return sorted(vocab)
+
+def create_bow(vocab, filepath):
+    """ Create a single dictionary for the data
+        Note: label may be None
+    """
+    bow = {}
+    
+    txt_file = open(filepath, 'r', encoding='UTF-8')
+    token = txt_file.readlines()
+    for w in token:
+        word = w.strip("\n")
+        if word in vocab:
+            if word in bow.keys():
+                bow[word] += 1
+            else:
+                bow[word] = 1
+        else:
+            if None in bow.keys():
+                bow[None] += 1
+            else:
+                bow[None] = 1
+        
+    return bow
+
+def load_training_data(vocab, directory):
+    """ Create the list of dictionaries """
+    dataset = []
+    entry = {}
+    
+    sub_directory = os.listdir(directory) 
+    for sd in sub_directory:
+        dir_path = os.path.join(directory, sd)
+        txt_file = os.listdir(dir_path) # files inside each label
+        for f in txt_file:
+            file_path = os.path.join(dir_path, f)
+            entry = {"label": sd, "bow": create_bow(vocab, file_path)} 
+            dataset.append(entry)
+
+    return dataset
+
+import math
+
+def prior(training_data, label_list):
+    """ return the prior probability of the label in the training set
+        => frequency of DOCUMENTS
+    """
+
+    smooth = 1 # smoothing factor
+    logprob = {}
+
+    for label in label_list:
+        f_w_label = 0
+        for i in training_data:
+            if i["label"] == label:
+                f_w_label += 1
+        logprob[label] = math.log((f_w_label+smooth) / (len(training_data) + smooth * len(label_list)))
+        
+
+    return logprob
+
+def p_word_given_label(vocab, training_data, label):
+    """ return the class conditional probability of label over all words, with smoothing """
+
+    smooth = 1 # smoothing factor
+    word_prob = {}
+    data = []
+    empty = {} # including words of files with different label
+    
+    all_tokens = len(vocab) + 1 #adding 1 due to None
+    
+    for item in training_data:
+        if item["label"] == label:
+            data.append(item["bow"]) #transfering the bow of specific label
+        else:
+            for i in item["bow"].keys(): #transfering the bow of files with different label
+                empty[i] = 0 
+    
+    data.append(empty)
+    total = 0
+    temp  = {}
+    temp[None] = 0 # including the case when the cutoff is 1 and there is no None
+
+    for d in data:
+        for key in d.keys():
+            total += d[key]
+            
+            if key in vocab:
+                if key in temp.keys():
+                    temp[key] += d[key]
+                else:
+                    temp[key] = d[key]
+                
+            else:
+                if None in temp.keys():
+                    temp[None] += d[key]
+                else:
+                    temp[None] = d[key]
+                    
+    for i in temp.keys():
+        word_prob[i] = math.log((temp[i] + smooth) / (total + all_tokens*smooth))
+
+    return word_prob
+
+def train(training_directory, cutoff):
+    """ return a dictionary formatted as follows:
+            {
+             'vocabulary': <the training set vocabulary>,
+             'log prior': <the output of prior()>,
+             'log p(w|y=2016)': <the output of p_word_given_label() for 2016>,
+             'log p(w|y=2020)': <the output of p_word_given_label() for 2020>
+            }
+    """
+    retval = {}
+    label = ["2016", "2020"]
+    
+    vocab = create_vocabulary(training_directory, cutoff)
+    retval["vocabulary"] = vocab
+    
+    training_data = load_training_data(vocab, training_directory)
+    retval["log prior"] = prior(training_data, label)
+    
+    retval["log p(w|y=2016)"] = p_word_given_label(vocab, training_data, label[0])
+    
+    retval["log p(w|y=2020)"] = p_word_given_label(vocab, training_data, label[1])
+
+    return retval
+
+def classify(model, filepath):
+    """ return a dictionary formatted as follows:
+            {
+             'predicted y': <'2016' or '2020'>, 
+             'log p(y=2016|x)': <log probability of 2016 label for the document>, 
+             'log p(y=2020|x)': <log probability of 2020 label for the document>
+            }
+    """
+    #model = returned from train function
+    #filepath = txt file
+    
+    retval = {}
+    vocab = model["vocabulary"]
+    bow = create_bow(vocab, filepath)
+    label1 = 0 # for storing log p(y=2016|x)
+    label2 = 0 # for stroing log p(y=2020|x)
+    
+    log_prior = model["log prior"]
+    wgivenlabel2016 = model["log p(w|y=2016)"]
+    wgivenlabel2020 = model["log p(w|y=2020)"]
+    
+    for i in bow.keys():
+        if i in wgivenlabel2016.keys():
+            label1 += wgivenlabel2016[i]*(bow[i]) # a*log(b) = log(b^a)
+            
+    label1 += log_prior["2016"]
+    
+    for j in bow.keys():
+        if j in wgivenlabel2020.keys():
+            label2 += wgivenlabel2020[j]*(bow[j])
+            
+    label2 += log_prior["2020"]
+    
+    retval["log p(y=2016|x)"] = label1
+    retval["log p(y=2020|x)"] = label2
+    
+    if label1 >= label2:
+        retval["predicted y"] = "2016"
+    elif label1 < label2:
+        retval["predicted y"] = "2020"
+    
+    return retval
